@@ -1,0 +1,57 @@
+import sqlite3
+import csv
+import sys
+
+
+csv.field_size_limit(sys.maxsize)
+
+
+CSV_FILE = "products.csv"
+DB_FILE = "products.db"
+TABLE_NAME = "data"
+BATCH_SIZE = 10000
+
+
+conn = sqlite3.connect(DB_FILE)
+cursor = conn.cursor()
+
+
+with open(CSV_FILE, "r", encoding="utf-8", newline="") as file:
+
+    reader = csv.reader(file, delimiter="\t", quotechar='"')
+    headers = next(reader)
+
+    columns = ", ".join([f'"{col}" TEXT' for col in headers])
+    cursor.execute(f'CREATE TABLE IF NOT EXISTS {TABLE_NAME} ({columns})')
+    conn.commit()
+
+    print(f"Таблица '{TABLE_NAME}' успешно создана.")
+
+    batch = []
+    total_inserted = 0
+
+    for row_num, row in enumerate(reader, start=1):
+        if len(row) == len(headers):
+            batch.append(row)
+        else:
+            print(
+                f"⚠️  Пропущена строка {row_num} (не совпадает количество столбцов)")
+
+        if len(batch) >= BATCH_SIZE:
+            cursor.executemany(
+                f'INSERT INTO {TABLE_NAME} VALUES ({", ".join(["?"] * len(headers))})', batch)
+            conn.commit()
+            total_inserted += len(batch)
+            print(f"✅ Вставлено {total_inserted} строк...")
+            batch = []
+
+    if batch:
+        cursor.executemany(
+            f'INSERT INTO {TABLE_NAME} VALUES ({", ".join(["?"] * len(headers))})', batch)
+        conn.commit()
+        total_inserted += len(batch)
+
+print(f"🎉 Завершено! Всего вставлено {total_inserted} строк в '{DB_FILE}'.")
+
+
+conn.close()
